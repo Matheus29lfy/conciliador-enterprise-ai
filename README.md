@@ -37,20 +37,20 @@ O sistema aplica uma abordagem de **3 camadas** para garantir precisão máxima 
 
 ```mermaid
 graph TD
-    Input[📂 Arquivos: Banco + ERP] --> L1{Camada 1: <br>Match Exato}
+    Input[📂 Arquivos: Banco + ERP] --> L1{"Camada 1: <br>Match Exato"}
     L1 -- Sim --> Conciliado[✅ Conciliado]
-    L1 -- Não --> L2{Camada 2: <br>Match Temporal}
+    L1 -- Não --> L2{"Camada 2: <br>Match Temporal"}
     
     L2 -- Sim (D+1/D-1) --> Conciliado
-    L2 -- Não --> L3{Camada 3: <br>Agente IA (Llama 3.2)}
+    L2 -- Não --> L3{"Camada 3: <br>Agente IA (Llama 3.2)"}
     
     L3 -- Alta Confiança --> Conciliado
     L3 -- Baixa Confiança --> Humano[⚠️ Revisão Humana]
     
     Conciliado --> Output[📊 Relatório Excel + Dashboard]
     Humano --> Output
-    
-    style L3 fill:#f9f,stroke:#333,stroke-width:2px
+
+    style L3 fill:#f9f,stroke:#333,stroke-width:2px,color:#000
 
 ```
 1. **Camada 1 (Match Exato):** Cruza Valor e Data idênticos. Liquida 80% do volume instantaneamente.
