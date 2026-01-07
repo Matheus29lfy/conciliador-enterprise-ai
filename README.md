@@ -93,7 +93,7 @@ Solução construída com foco em performance e segurança de dados:
 ### Instalação
 
 ```bash
-git clone [https://github.com/Dias500/conciliador-enterprise.git](https://github.com/Dias500/conciliador-enterprise.git)
+git clone [https://github.com/Dias500/conciliador-enterprise-ai](https://github.com/Dias500/conciliador-enterprise-ai)
 pip install -r requirements.txt
 streamlit run app.py
 
