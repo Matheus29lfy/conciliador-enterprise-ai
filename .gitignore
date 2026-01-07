@@ -9,6 +9,7 @@ logs/*
 # Mas manter os arquivos .gitkeep (truque para subir as pastas vazias)
 !data/input/.gitkeep
 !data/output/.gitkeep
+!logs/.gitkeep
 
 # Ignorar cache do Python
 __pycache__/
