@@ -3,6 +3,7 @@ import time
 import logging
 import os
 from typing import Tuple, Optional
+from datetime import datetime
 
 # --- IMPORTAÇÃO DO AGENTE BLINDADO ---
 from agente_seguro_v2 import consultar_agente_blindado
@@ -12,19 +13,10 @@ PASTA_INPUT = 'data/input'
 PASTA_OUTPUT = 'data/output'
 PASTA_LOGS = 'logs'
 
+# Garante estrutura
 os.makedirs(PASTA_INPUT, exist_ok=True)
 os.makedirs(PASTA_OUTPUT, exist_ok=True)
 os.makedirs(PASTA_LOGS, exist_ok=True)
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(os.path.join(PASTA_LOGS, "execucao.log")),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger()
 
 # Regras de Negócio
 TOLERANCIA_DIAS = 3
@@ -32,6 +24,43 @@ CONFIANCA_MINIMA = ['alta']
 COLUNAS_PROTHEUS = ['Data', 'Historico', 'Valor', 'Natureza']
 COLUNAS_BANCO = ['Data', 'Descricao', 'Valor']
 LIMITE_VALOR_MAXIMO = 1_000_000_000.00 
+
+# --- FUNÇÃO DE LOG (CORREÇÃO DO BUG 0KB) ---
+def configurar_logger_dinamico():
+    """
+    Cria um arquivo de log EXCLUSIVO para esta execução, 
+    usando timestamp no nome para garantir histórico único.
+    """
+    logger = logging.getLogger()
+    
+    # 1. Limpa handlers antigos (limpeza da memória)
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+    
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+    # 2. Gera nome único: "log_execucao_2025-01-07_15-30-00.txt"
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    nome_arquivo = f"log_execucao_{timestamp}.txt"
+    caminho_log = os.path.join(PASTA_LOGS, nome_arquivo)
+
+    # 3. Configura o FileHandler para este arquivo novo
+    file_handler = logging.FileHandler(caminho_log, mode='w', encoding='utf-8') 
+    file_handler.setFormatter(formatter)
+    
+    # 4. Mantém o StreamHandler (para ver no terminal do VS Code também)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(stream_handler)
+    
+    # Retorna o logger e o caminho do arquivo (caso queira mostrar na tela qual foi gerado)
+    return logger, caminho_log
+
+# Inicializa logger globalmente para funções auxiliares, mas será resetado no pipeline
+logger = logging.getLogger()
 
 def validar_schema(df: pd.DataFrame, colunas_esperadas: list, nome_arq: str) -> bool:
     faltantes = [c for c in colunas_esperadas if c not in df.columns]
@@ -56,7 +85,7 @@ def validar_regras_negocio(df: pd.DataFrame, origem: str) -> pd.DataFrame:
     return df
 
 def carregar_e_saneamento() -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
-    print("📂 Carregando e validando arquivos...")
+    logger.info("📂 Iniciando carregamento e validação de arquivos...") # Agora usa o logger configurado
     try:
         caminho_p = os.path.join(PASTA_INPUT, 'sistema_protheus.xlsx')
         caminho_b = os.path.join(PASTA_INPUT, 'extrato_banco.xlsx')
@@ -91,7 +120,7 @@ def carregar_e_saneamento() -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFra
         df_p.dropna(subset=['Data'], inplace=True)
         df_b.dropna(subset=['Data'], inplace=True)
 
-        # MUDANÇA 1: Nome amigável para o financeiro
+        # Ref Auditoria
         df_p['Ref. Auditoria'] = df_p.index.astype(str) + "_PROTHEUS"
         df_b['Ref. Auditoria'] = df_b.index.astype(str) + "_BANCO"
 
@@ -104,14 +133,24 @@ def carregar_e_saneamento() -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFra
         logger.error(f"Arquivos não encontrados em '{PASTA_INPUT}'.")
         return None, None
     except Exception as e:
-        logger.error(f"ERRO DESCONHECIDO: {e}")
+        logger.error(f"ERRO DESCONHECIDO NO CARREGAMENTO: {e}")
         return None, None
 
 def pipeline_enterprise():
+    # Pega o logger e o nome do arquivo gerado
+    global logger
+    logger, caminho_log_atual = configurar_logger_dinamico()
+    
+    logger.info(f">>> INICIANDO NOVA EXECUÇÃO (ID: {caminho_log_atual}) <<<")
+    
     df_p, df_b = carregar_e_saneamento()
-    if df_p is None: return
+    if df_p is None: 
+        logger.error("Falha no carregamento. Abortando pipeline.")
+        return
 
+    logger.info("⚡ ETAPA 1: Executando Match Exato (Matemático)...")
     print("\n⚡ ETAPA 1: MATCH EXATO (Matemático)...")
+    
     match_exato = pd.merge(
         df_p, df_b, 
         on=['Data', 'Valor_Real'], 
@@ -124,12 +163,13 @@ def pipeline_enterprise():
     
     pendencias = match_exato[match_exato['_merge'] != 'both']
     
-    # Prepara as sobras mantendo a nova coluna de Ref. Auditoria
     sobra_p = pendencias[pendencias['_merge'] == 'left_only'][['Data', 'Historico', 'Valor_Real', 'Ref. Auditoria_Protheus']].rename(columns={'Ref. Auditoria_Protheus': 'Ref. Auditoria'})
     sobra_b = pendencias[pendencias['_merge'] == 'right_only'][['Data', 'Descricao', 'Valor_Real', 'Ref. Auditoria_Banco']].rename(columns={'Ref. Auditoria_Banco': 'Ref. Auditoria'})
 
+    logger.info(f"Conciliados Exatos: {len(conciliados)}")
     print(f"   -> {len(conciliados)} conciliados exatos.")
 
+    logger.info("⚡ ETAPA 2: Executando Match Inteligente (Fuzzy + IA)...")
     print("\n⚡ ETAPA 2: MATCH INTELIGENTE (Otimizado + IA)...")
     
     novos_matches = []
@@ -141,7 +181,6 @@ def pipeline_enterprise():
     for idx_p, row_p in sobra_p.iterrows():
         val = row_p['Valor_Real']
         
-        # MUDANÇA 2: Se o valor nem existe no outro lado, já sabemos o motivo da pendência futura
         if val in grupo_banco.groups:
             candidatos_b = grupo_banco.get_group(val)
             
@@ -157,17 +196,22 @@ def pipeline_enterprise():
                     match_found = True
                     metodo = "Tolerancia Data"
                     justificativa = f"Valor igual, compensado com {dias_dif} dias de diferença."
+                    logger.info(f"Match Fuzzy: {row_p['Ref. Auditoria']} <-> {row_b['Ref. Auditoria']} (Dias: {dias_dif})")
                 
                 elif dias_dif <= 5: 
                     print(f"   🤖 IA Analisando: '{row_p['Historico']}' vs '{row_b['Descricao']}'")
+                    logger.info(f"Acionando IA para: '{row_p['Historico']}' vs '{row_b['Descricao']}'")
                     try:
                         res_ia = consultar_agente_blindado(row_p['Historico'], row_b['Descricao'])
                         if res_ia and res_ia['match'] and res_ia['confianca'].lower() in CONFIANCA_MINIMA:
                             match_found = True
                             metodo = "Inteligência Artificial"
                             justificativa = f"[IA Conf: {res_ia['confianca']}] {res_ia['justificativa']}"
+                            logger.info(f"IA MATCH CONFIRMADO: {justificativa}")
+                        else:
+                            logger.info("IA rejeitou a conciliação.")
                     except Exception as e:
-                        logger.error(f"   ❌ Erro pontual na IA: {e}")
+                        logger.error(f"❌ Erro pontual na IA: {e}")
                         continue 
                 
                 if match_found:
@@ -184,42 +228,34 @@ def pipeline_enterprise():
                     ids_b_removidos.add(row_b['Ref. Auditoria'])
                     break 
     
-    # Filtra as sobras finais
     sobra_p_final = sobra_p[~sobra_p['Ref. Auditoria'].isin(ids_p_removidos)].copy()
     sobra_b_final = sobra_b[~sobra_b['Ref. Auditoria'].isin(ids_b_removidos)].copy()
     
-    # MUDANÇA 3: Adiciona justificativa nas pendências
-    # Lógica: Se sobrou, por que sobrou?
-    
+    # Justificativas de Pendência
     def justificar_pendencia(row, df_comparacao):
         val = row['Valor_Real']
-        # Verifica se o valor existe em algum lugar da outra tabela (mesmo que já conciliado ou com data errada)
         if val in df_comparacao['Valor_Real'].values:
             return "Valor encontrado no outro extrato, mas datas ou descrições não bateram (IA Rejeitou ou Fora da Tolerância)."
         else:
             return "Valor Único: Não foi encontrado nenhum lançamento com este valor no outro extrato."
 
-    # Aplica as justificativas
     if not sobra_p_final.empty:
-        # Para justificar Protheus, olhamos o Banco Original
         sobra_p_final['Motivo da Pendência'] = sobra_p_final.apply(lambda row: justificar_pendencia(row, df_b), axis=1)
 
     if not sobra_b_final.empty:
-        # Para justificar Banco, olhamos o Protheus Original
         sobra_b_final['Motivo da Pendência'] = sobra_b_final.apply(lambda row: justificar_pendencia(row, df_p), axis=1)
 
     df_novos = pd.DataFrame(novos_matches)
+    logger.info(f"Conciliados via Lógica/IA: {len(df_novos)}")
     print(f"   -> {len(df_novos)} conciliados via Lógica Avançada/IA.")
 
     # --- RELATÓRIO FINAL ---
     caminho_saida = os.path.join(PASTA_OUTPUT, 'RELATORIO_ENTERPRISE_V2.xlsx')
+    logger.info(f"Salvando relatório em: {caminho_saida}")
     print(f"\n💾 Salvando '{caminho_saida}'...")
     
     with pd.ExcelWriter(caminho_saida, engine='xlsxwriter') as writer:
-        
-        # Junta Conciliados
         cols_conciliados = ['Data', 'Historico', 'Descricao', 'Valor_Real', 'Metodo', 'Justificativa_Auditoria']
-        # Garante que as colunas existem antes de concatenar
         conciliados_exatos_limpo = conciliados.reindex(columns=cols_conciliados)
         
         if not df_novos.empty:
@@ -231,21 +267,19 @@ def pipeline_enterprise():
         sobra_p_final.to_excel(writer, sheet_name='Pendencia Protheus', index=False)
         sobra_b_final.to_excel(writer, sheet_name='Pendencia Banco', index=False)
         
-        # Formatação Visual (Ajuste de larguras)
         workbook = writer.book
         fmt_text = workbook.add_format({'text_wrap': True})
         
-        # Formata aba Conciliados
         ws_conc = writer.sheets['Conciliados']
-        ws_conc.set_column('F:F', 50, fmt_text) # Justificativa larga
+        ws_conc.set_column('F:F', 50, fmt_text)
         
-        # Formata abas de Pendência
         if 'Pendencia Protheus' in writer.sheets:
-            writer.sheets['Pendencia Protheus'].set_column('E:E', 60, fmt_text) # Motivo Pendência
+            writer.sheets['Pendencia Protheus'].set_column('E:E', 60, fmt_text)
         if 'Pendencia Banco' in writer.sheets:
             writer.sheets['Pendencia Banco'].set_column('E:E', 60, fmt_text)
 
-    print("✅ Processo Enterprise V3 Concluído (Com Justificativas Completas).")
+    logger.info("✅ Processo Enterprise V3 Concluído com Sucesso.")
+    print("✅ Processo Enterprise V3 Concluído.")
 
 if __name__ == "__main__":
     start = time.time()

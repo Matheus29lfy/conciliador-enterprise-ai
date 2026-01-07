@@ -85,7 +85,7 @@ def validar_assinatura_arquivo(uploaded_file, tipo_esperado):
                 return False, "Arquivo inválido para Protheus. Faltam colunas obrigatórias ('Natureza' ou 'Historico')."
             # Não deve ter 'descricao' (típico de extrato bancário)
             if "descricao" in colunas and "natureza" not in colunas:
-                return False, "⚠️ Pareces ter enviado um Extrato Bancário no campo do Protheus. Verifique."
+                return False, "⚠️ Parece que você enviou um Extrato Bancário no campo do Protheus. Verifique."
 
         # Regras para BANCO
         elif tipo_esperado == "Banco":
@@ -94,7 +94,7 @@ def validar_assinatura_arquivo(uploaded_file, tipo_esperado):
                 return False, "Arquivo inválido para Banco. Falta coluna 'Descricao'."
             # Não deve ter 'natureza' (típico de ERP)
             if "natureza" in colunas:
-                return False, "⚠️ Pareces ter enviado um relatório do Protheus no campo do Banco. Verifique."
+                return False, "⚠️ Parece que você enviou um relatório do Protheus no campo do Banco. Verifique."
                 
         return True, ""
         
