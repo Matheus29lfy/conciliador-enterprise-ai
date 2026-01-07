@@ -2,8 +2,8 @@
 venv/
 
 # Ignorar dados
-data/input/*
-data/output/*
+data/input/*.xlsx   
+data/output/*.xlsx
 logs/*
 
 # Mas manter os arquivos .gitkeep (truque para subir as pastas vazias)
