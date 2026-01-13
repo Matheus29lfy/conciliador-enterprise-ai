@@ -5,6 +5,7 @@ import time
 import shutil
 import logging
 from datetime import datetime
+import unicodedata
 
 # --- IMPORTAÇÃO DO BACKEND ---
 from conciliador_enterprise_v2 import pipeline_enterprise, PASTA_LOGS, PASTA_OUTPUT, PASTA_INPUT
@@ -76,8 +77,7 @@ def validar_assinatura_arquivo(uploaded_file, tipo_esperado):
     try:
         # Lê apenas o cabeçalho
         df = pd.read_excel(uploaded_file, nrows=0)
-        colunas = [c.lower() for c in df.columns]
-        
+        colunas = [normalizar_coluna(c) for c in df.columns]
         # Regras para PROTHEUS
         if tipo_esperado == "Protheus":
             # Deve ter 'natureza' (para saber D/C) ou 'historico'
@@ -112,7 +112,18 @@ def salvar_upload_seguro(uploaded_file, nome_destino):
     except Exception as e:
         st.error(f"Erro ao salvar arquivo em disco: {e}")
         return False
-
+def normalizar_coluna(text):
+    """Remove acentos, espaços extras e padroniza para minúsculo."""
+    if not isinstance(text, str):
+        return str(text).lower().strip()
+    
+    # Normalização NFKD: Decompõe caracteres (ex: 'ç' vira 'c' + ',')
+    # e remove os acentos (non-spacing marks)
+    text = "".join(
+        c for c in unicodedata.normalize('NFKD', text)
+        if not unicodedata.combining(c)
+    )
+    return text.lower().strip()
 # --- INICIALIZAÇÃO DE ESTADO ---
 if 'processando' not in st.session_state:
     st.session_state['processando'] = False
