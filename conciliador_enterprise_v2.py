@@ -8,6 +8,9 @@ from datetime import datetime
 # --- IMPORTAÇÃO DO AGENTE BLINDADO ---
 from agente_seguro_v2 import consultar_agente_blindado
 
+# --- IMPORTAÇÃO APP
+from utils import normalizar_coluna
+
 # --- CONFIGURAÇÃO ---
 PASTA_INPUT = 'data/input'
 PASTA_OUTPUT = 'data/output'
@@ -81,7 +84,7 @@ def validar_regras_negocio(df: pd.DataFrame, origem: str) -> pd.DataFrame:
     duplicatas = df[df.duplicated(subset=cols_dup, keep=False)]
     if not duplicatas.empty:
         logger.warning(f"[{origem}] ATENÇÃO: {len(duplicatas)} lançamentos duplicados detectados!")
-    
+
     return df
 
 def carregar_e_saneamento() -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
@@ -95,6 +98,9 @@ def carregar_e_saneamento() -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFra
 
         df_p = pd.read_excel(caminho_p)
         df_b = pd.read_excel(caminho_b)
+        # --- APLICA NA ESTRUTURA (Colunas) ---
+        df_p.columns = [normalizar_coluna(c, True) for c in df_p.columns]
+        df_b.columns = [normalizar_coluna(c,True) for c in df_b.columns]
 
         if not validar_schema(df_p, COLUNAS_PROTHEUS, "Protheus") or \
            not validar_schema(df_b, COLUNAS_BANCO, "Banco"):
@@ -119,7 +125,6 @@ def carregar_e_saneamento() -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFra
 
         df_p.dropna(subset=['Data'], inplace=True)
         df_b.dropna(subset=['Data'], inplace=True)
-
         # Ref Auditoria
         df_p['Ref. Auditoria'] = df_p.index.astype(str) + "_PROTHEUS"
         df_b['Ref. Auditoria'] = df_b.index.astype(str) + "_BANCO"

@@ -5,7 +5,7 @@ import time
 import shutil
 import logging
 from datetime import datetime
-import unicodedata
+from utils import normalizar_coluna
 
 # --- IMPORTAÇÃO DO BACKEND ---
 from conciliador_enterprise_v2 import pipeline_enterprise, PASTA_LOGS, PASTA_OUTPUT, PASTA_INPUT
@@ -112,18 +112,7 @@ def salvar_upload_seguro(uploaded_file, nome_destino):
     except Exception as e:
         st.error(f"Erro ao salvar arquivo em disco: {e}")
         return False
-def normalizar_coluna(text):
-    """Remove acentos, espaços extras e padroniza para minúsculo."""
-    if not isinstance(text, str):
-        return str(text).lower().strip()
-    
-    # Normalização NFKD: Decompõe caracteres (ex: 'ç' vira 'c' + ',')
-    # e remove os acentos (non-spacing marks)
-    text = "".join(
-        c for c in unicodedata.normalize('NFKD', text)
-        if not unicodedata.combining(c)
-    )
-    return text.lower().strip()
+
 # --- INICIALIZAÇÃO DE ESTADO ---
 if 'processando' not in st.session_state:
     st.session_state['processando'] = False
