@@ -14,3 +14,4 @@ logs/*
 # Ignorar cache do Python
 __pycache__/
 *.pyc
+.vscode/
